@@ -1,20 +1,11 @@
 import hashlib
+from abc import ABC, abstractmethod
+from uuid import UUID
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
-
-from ..item.model import Item
-
-from ..item.repository import find_item_by_id
-
-from .model import CartItem, User
-
-from .repository import (
-    find_cart_items_for_user_id,
-    find_user_by_email,
-    find_user_by_id,
-    save_user,
-)
-from .schema import (
+from be_task_ca.user.model import CartItem, User
+from be_task_ca.item.model import Item
+from be_task_ca.item.usecases import ItemRepository
+from be_task_ca.user.schema import (
     AddToCartRequest,
     AddToCartResponse,
     CreateUserRequest,
@@ -22,8 +13,28 @@ from .schema import (
 )
 
 
-def create_user(create_user: CreateUserRequest, db: Session) -> CreateUserResponse:
-    search_result = find_user_by_email(create_user.email, db)
+class UserRepository(ABC):
+    @abstractmethod
+    def add(self, user: User) -> None:
+        ...
+
+    @abstractmethod
+    def get(self, user_id: UUID) -> User | None:
+        ...
+
+    @abstractmethod
+    def get_by_email(self, email: str) -> User | None:
+        ...
+
+    @abstractmethod
+    def list_cart(self, user_id: UUID) -> list[CartItem]:
+        ...
+
+
+def create_user(
+    create_user: CreateUserRequest, db: UserRepository
+) -> CreateUserResponse:
+    search_result = db.get_by_email(create_user.email)
     if search_result is not None:
         raise HTTPException(
             status_code=409, detail="An user with this email adress already exists"
@@ -39,7 +50,7 @@ def create_user(create_user: CreateUserRequest, db: Session) -> CreateUserRespon
         shipping_address=create_user.shipping_address,
     )
 
-    save_user(new_user, db)
+    db.add(new_user)
 
     return CreateUserResponse(
         id=new_user.id,
@@ -50,12 +61,17 @@ def create_user(create_user: CreateUserRequest, db: Session) -> CreateUserRespon
     )
 
 
-def add_item_to_cart(user_id: int, cart_item: AddToCartRequest, db: Session) -> AddToCartResponse:
-    user: User = find_user_by_id(user_id, db)
+def add_item_to_cart(
+    user_id: int,
+    cart_item: AddToCartRequest,
+    user_db: UserRepository,
+    item_db: ItemRepository,
+) -> AddToCartResponse:
+    user: User = user_db.get(user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User does not exist")
 
-    item: Item = find_item_by_id(cart_item.item_id, db)
+    item: Item = item_db.get(cart_item.item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item does not exist")
     if item.quantity < cart_item.quantity:
@@ -71,15 +87,15 @@ def add_item_to_cart(user_id: int, cart_item: AddToCartRequest, db: Session) -> 
 
     user.cart_items.append(new_cart_item)
 
-    save_user(user, db)
+    user_db.add(user)
 
-    return list_items_in_cart(user.id, db)
+    return list_items_in_cart(user.id, user_db)
 
 
-def list_items_in_cart(user_id, db):
-    cart_items = find_cart_items_for_user_id(user_id, db)
+def list_items_in_cart(user_id: UUID, db: UserRepository) -> AddToCartResponse:
+    cart_items = db.list_cart(user_id)
     return AddToCartResponse(items=list(map(cart_item_model_to_schema, cart_items)))
 
 
-def cart_item_model_to_schema(model: CartItem):
+def cart_item_model_to_schema(model: CartItem) -> AddToCartRequest:
     return AddToCartRequest(item_id=model.item_id, quantity=model.quantity)

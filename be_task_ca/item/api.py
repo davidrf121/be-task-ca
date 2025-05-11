@@ -1,11 +1,8 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
 
-from .usecases import create_item, get_all
-
-from ..common import get_db
-
-from .schema import CreateItemRequest, CreateItemResponse
+from be_task_ca.item.usecases import create_item, get_all
+from be_task_ca.item.repository import item_repository
+from be_task_ca.item.schema import CreateItemRequest, CreateItemResponse
 
 
 item_router = APIRouter(
@@ -15,12 +12,10 @@ item_router = APIRouter(
 
 
 @item_router.post("/")
-async def post_item(
-    item: CreateItemRequest, db: Session = Depends(get_db)
-) -> CreateItemResponse:
-    return create_item(item, db)
+async def post_item(item: CreateItemRequest) -> CreateItemResponse:
+    return create_item(item, item_repository)
 
 
 @item_router.get("/")
-async def get_items(db: Session = Depends(get_db)):
-    return get_all(db)
+async def get_items():
+    return get_all(item_repository)

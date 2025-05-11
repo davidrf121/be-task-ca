@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import List
 import uuid
 
-from sqlalchemy import UUID, ForeignKey
+from sqlalchemy import ForeignKey
 from be_task_ca.database import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,5 +30,5 @@ class User(Base):
     first_name: Mapped[str]
     last_name: Mapped[str]
     hashed_password: Mapped[str]
-    shipping_address: Mapped[str] = mapped_column(default=None)
-    cart_items: Mapped[List["CartItem"]] = relationship()
+    shipping_address: Mapped[str] = mapped_column(nullable=True, default=None)
+    cart_items: Mapped[list[CartItem]] = relationship()
